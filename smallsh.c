@@ -56,10 +56,14 @@ void parse_cmd(CMD *new_cmd) {
   bool output_flag = false;
   int arg_i = 0;
 
+  // initialize the fields that may not take on another value
+  new_cmd->input_file = NULL;
+  new_cmd->output_file = NULL;
+  new_cmd->background = false;
+
     /* Time to parse input! */
     do {
       n = scanf("%ms", &ptr);
-      printf("processing %s\n", ptr);
 
       if (errno != 0) {
         perror("scanf");
@@ -75,7 +79,7 @@ void parse_cmd(CMD *new_cmd) {
           output_flag = false;
         } else {
           // no specific flag. check if the string is > or < of & otherwise save as next arg
-          if (strcmp(ptr, ">") == 0) {
+          if (strcmp(ptr, "<") == 0) {
             input_flag = true;
             free(ptr);
           } else if (strcmp(ptr, ">") == 0) {
@@ -85,7 +89,6 @@ void parse_cmd(CMD *new_cmd) {
             new_cmd->background = true;
             free(ptr);
           } else {
-            printf("found arg %s\n", ptr);
             new_cmd->args[arg_i] = ptr;
             ++arg_i;
           }
@@ -99,7 +102,6 @@ void parse_cmd(CMD *new_cmd) {
           break;
       }
 
-      printf("n is %d", n);
     } while (n != 0);
 
   return;
@@ -112,6 +114,18 @@ void free_cmd(struct command *new_cmd) {
   while (new_cmd->args[i] != NULL) {
     printf("arg[%d]: %s\n", i, new_cmd->args[i]);
     ++i;
+  }
+
+  if (new_cmd->input_file != NULL) {
+    printf("input file: %s\n", new_cmd->input_file);
+  }
+
+  if (new_cmd->output_file != NULL) {
+    printf("output file: %s\n", new_cmd->output_file);
+  }
+
+  if (new_cmd->background) {
+    printf("running in the background\n");
   }
 
   return;
