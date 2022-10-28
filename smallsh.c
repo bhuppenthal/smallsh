@@ -31,11 +31,46 @@ int main(int argc, char *argv[]) {
   CMD *cmd_ptr = &new_cmd;
   for (size_t i = 0; i < MAX_ARGS; i++) new_cmd.args[i] = NULL;
 
+  while (true) {
+
     printf(": ");
     parse_cmd(cmd_ptr);
-    print_cmd(cmd_ptr);
-    free_cmd(cmd_ptr);
 
+    /* Here's where the magic happens. */
+    // if the first char in cmd is a comment, we do nothing
+    // if the cmd struct is blank, so cmd is null, we do nothing
+    if (new_cmd.cmd != NULL) {
+      if ( strncmp(new_cmd.cmd, "#", 1) != 0 ) {
+      
+        // exit
+        if (strcmp(new_cmd.cmd, "exit") == 0) {
+          printf("hey nice exit\n");
+        }
+        // status
+        else if (strcmp(new_cmd.cmd, "status") == 0) {
+          printf("hey nice status\n");
+        }
+        // cd
+        else if (strcmp(new_cmd.cmd, "cd") == 0) {
+          printf("hey nice cd\n");
+        }
+        // all other commands
+        else {
+          printf("you want something else? sure!\n");
+          //fork
+          ////switch case
+          ///child exec
+          ///parent wait
+          ///error
+        }
+      }
+    }
+
+    free_cmd(cmd_ptr);
+    printf("\n");
+
+
+  }
   /* Develop code to free all memory allocated to the struct
    * this will also become its own function. one day. i believe in it. */
 
@@ -57,6 +92,7 @@ void parse_cmd(CMD *new_cmd) {
   int arg_i = 0;
 
   // initialize the fields that may not take on another value
+  new_cmd->cmd = NULL;
   new_cmd->input_file = NULL;
   new_cmd->output_file = NULL;
   new_cmd->background = false;
@@ -109,7 +145,10 @@ void parse_cmd(CMD *new_cmd) {
 
 void free_cmd(CMD *new_cmd) {
   // free command
-  free(new_cmd->cmd);
+  if (new_cmd->cmd != NULL) {
+    free(new_cmd->cmd);
+    new_cmd->cmd = NULL;
+  }
 
   //free args loop
   int i = 0;
