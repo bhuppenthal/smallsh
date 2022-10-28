@@ -18,10 +18,10 @@ struct command{
 
 typedef struct command CMD;
 
-// Function delcarations
-void parse_cmd(CMD *cmd);
-void print_cmd(CMD *cmd);
-void free_cmd(CMD *cmd);
+// Function declarations
+void parse_cmd(CMD *new_cmd);
+void print_cmd(CMD *new_cmd);
+void free_cmd(CMD *new_cmd);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -107,7 +107,37 @@ void parse_cmd(CMD *new_cmd) {
   return;
 }
 
-void free_cmd(struct command *new_cmd) {
+void free_cmd(CMD *new_cmd) {
+  // free command
+  free(new_cmd->cmd);
+
+  //free args loop
+  int i = 0;
+  while (new_cmd->args[i] != NULL) {
+    free(new_cmd->args[i]);
+    new_cmd->args[i] = NULL;
+    ++i;
+  }
+
+  // free input, output
+  if (new_cmd->input_file != NULL) {
+    free(new_cmd->input_file);
+    new_cmd->input_file = NULL;
+  }
+
+  if (new_cmd->output_file != NULL) {
+    free(new_cmd->output_file);
+    new_cmd->output_file = NULL;
+  }
+
+  // set background to false
+  new_cmd->background = false;
+
+  return;
+}
+
+void print_cmd(CMD *new_cmd) {
+   
   printf("cmd: %s\n", new_cmd->cmd);
 
   int i = 0;
@@ -128,10 +158,6 @@ void free_cmd(struct command *new_cmd) {
     printf("running in the background\n");
   }
 
-  return;
-}
-
-void print_cmd(struct command *new_cmd) {
   return;
 }
 
