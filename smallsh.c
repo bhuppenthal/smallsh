@@ -9,11 +9,14 @@
 
 // definition of the command struct
 struct command{
+  char* cmd_buffer;
   char* cmd;
   char* args[MAX_ARGS];
   char* input_file;
   char* output_file;
   bool background;
+  bool comment;
+  bool empty;
 };
 
 typedef struct command CMD;
@@ -35,6 +38,7 @@ int main(int argc, char *argv[]) {
 
     printf(": ");
     parse_cmd(cmd_ptr);
+    print_cmd(cmd_ptr);
 
     /* Here's where the magic happens. */
     // if the first char in cmd is a comment, we do nothing
@@ -78,14 +82,12 @@ int main(int argc, char *argv[]) {
 }
 
 void parse_cmd(CMD *new_cmd) {
- 
-  char *ptr;
-  int n = 0;
-  errno = 0;
-  int nl_char;
 
-  /* parsing should be in its own function and the struct returned 
-   * for now, here is the code to parse */
+  char *buffer = NULL;
+  size_t buffer_bytes;
+  char *ptr;
+  char *delim = " ";
+  errno = 0;
   bool cmd_flag = true;
   bool input_flag = false;
   bool output_flag = false;
@@ -97,10 +99,29 @@ void parse_cmd(CMD *new_cmd) {
   new_cmd->output_file = NULL;
   new_cmd->background = false;
 
-    /* Time to parse input! */
-    do {
-      n = scanf("%ms", &ptr);
+  // read the line into the buffer using getline()
+  // this will automatically allocate this buffer, which will need to be freed.
+  // so this pointer needs to be stored in struct, so it can later be freed.
+  getline(&buffer, &buffer_bytes, stdin);
+  new_cmd->cmd_buffer = buffer;
 
+  // perform the check for an empty line or a comment line here.
+  if (buffer[0] == '\n') {
+    printf("empty command\n");
+    new_cmd->empty = true;
+    return;
+  } else if (buffer[0] == '#') {
+    printf("comment\n");
+    new_cmd->comment = true;
+    return;
+  }
+
+
+    
+  /* Time to parse input! */
+  ptr = strtok(buffer, delim);
+
+    do {
       if (errno != 0) {
         perror("scanf");
       } else {
@@ -117,60 +138,55 @@ void parse_cmd(CMD *new_cmd) {
           // no specific flag. check if the string is > or < of & otherwise save as next arg
           if (strcmp(ptr, "<") == 0) {
             input_flag = true;
-            free(ptr);
           } else if (strcmp(ptr, ">") == 0) {
             output_flag = true;
-            free(ptr);
-          } else if (strcmp(ptr, "&") == 0) {
+          } else if (strcmp(ptr, "&\n") == 0) {
             new_cmd->background = true;
-            free(ptr);
           } else {
             new_cmd->args[arg_i] = ptr;
             ++arg_i;
           }
         }
       }
+      ptr = strtok(NULL, delim);
 
-      // check if we have hit the new line, if so break
-      nl_char = getchar();
-      if (nl_char == '\n') {
-          printf("\n");
-          break;
-      }
+    } while (ptr != NULL);
 
-    } while (n != 0);
 
+exit:
   return;
 }
 
 void free_cmd(CMD *new_cmd) {
-  // free command
+
+  // overwrite the command
   if (new_cmd->cmd != NULL) {
-    free(new_cmd->cmd);
     new_cmd->cmd = NULL;
   }
 
-  //free args loop
+  // overwrite the args
   int i = 0;
   while (new_cmd->args[i] != NULL) {
-    free(new_cmd->args[i]);
     new_cmd->args[i] = NULL;
     ++i;
   }
 
-  // free input, output
+  // overwrite input file
   if (new_cmd->input_file != NULL) {
-    free(new_cmd->input_file);
     new_cmd->input_file = NULL;
   }
 
+  // overwrite output file
   if (new_cmd->output_file != NULL) {
-    free(new_cmd->output_file);
     new_cmd->output_file = NULL;
   }
 
   // set background to false
   new_cmd->background = false;
+  new_cmd->comment = false;
+  new_cmd->empty = false;
+
+  free(new_cmd->cmd_buffer);
 
   return;
 }
