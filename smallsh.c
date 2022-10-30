@@ -9,7 +9,6 @@
 
 // definition of the command struct
 struct command{
-  char* cmd_buffer;
   char* cmd;
   char* args[MAX_ARGS];
   char* input_file;
@@ -31,21 +30,17 @@ int main(int argc, char *argv[]) {
 
   // initialize the command struct
   CMD new_cmd;
-  CMD *cmd_ptr = &new_cmd;
-  for (size_t i = 0; i < MAX_ARGS; i++) new_cmd.args[i] = NULL;
-
+  
   while (true) {
 
     printf(": ");
-    parse_cmd(cmd_ptr);
-    print_cmd(cmd_ptr);
+    parse_cmd(&new_cmd);
+    print_cmd(&new_cmd);
 
     /* Here's where the magic happens. */
     // if the first char in cmd is a comment, we do nothing
     // if the cmd struct is blank, so cmd is null, we do nothing
-    if (new_cmd.cmd != NULL) {
-      if ( strncmp(new_cmd.cmd, "#", 1) != 0 ) {
-      
+    if (!new_cmd.comment && !new_cmd.empty) { 
         // exit
         if (strcmp(new_cmd.cmd, "exit") == 0) {
           printf("hey nice exit\n");
@@ -68,15 +63,10 @@ int main(int argc, char *argv[]) {
           ///error
         }
       }
-    }
 
-    free_cmd(cmd_ptr);
+    free_cmd(&new_cmd);
     printf("\n");
-
-
   }
-  /* Develop code to free all memory allocated to the struct
-   * this will also become its own function. one day. i believe in it. */
 
   return EXIT_SUCCESS;
 }
@@ -84,17 +74,21 @@ int main(int argc, char *argv[]) {
 void parse_cmd(CMD *new_cmd) {
 
   char *buffer = NULL;
-  size_t buffer_bytes;
-  char *ptr;
+  size_t num_bytes;
+  ssize_t input_len;
+  char *tok_ptr;
   char *delim = " ";
+  size_t tok_len;
   errno = 0;
   bool cmd_flag = true;
   bool input_flag = false;
   bool output_flag = false;
   int arg_i = 0;
 
+  char *str_ptr;
   // initialize the fields that may not take on another value
   new_cmd->cmd = NULL;
+  for (size_t i = 0; i < MAX_ARGS; i++) new_cmd->args[i] = NULL;
   new_cmd->input_file = NULL;
   new_cmd->output_file = NULL;
   new_cmd->background = false;
@@ -102,82 +96,93 @@ void parse_cmd(CMD *new_cmd) {
   // read the line into the buffer using getline()
   // this will automatically allocate this buffer, which will need to be freed.
   // so this pointer needs to be stored in struct, so it can later be freed.
-  getline(&buffer, &buffer_bytes, stdin);
-  new_cmd->cmd_buffer = buffer;
+  input_len = getline(&buffer, &num_bytes, stdin);
 
   // perform the check for an empty line or a comment line here.
   if (buffer[0] == '\n') {
     printf("empty command\n");
     new_cmd->empty = true;
-    return;
+    goto exit;
   } else if (buffer[0] == '#') {
     printf("comment\n");
     new_cmd->comment = true;
-    return;
+    goto exit;
   }
 
+  // remove the trailing newline character
+  buffer[input_len - 1] = '\0';
 
-    
   /* Time to parse input! */
-  ptr = strtok(buffer, delim);
+  tok_ptr = strtok(buffer, delim);
 
     do {
-      if (errno != 0) {
-        perror("scanf");
+
+      /* Check for instances where we do not need to store a string, but instead need to set a flag: */
+      if (strcmp(tok_ptr, "<") == 0) {
+        input_flag = true;
+      } else if (strcmp(tok_ptr, ">") == 0) {
+        output_flag = true;
+      } else if (strcmp(tok_ptr, "&") == 0) {
+        new_cmd->background = true;
       } else {
+      
+        /* Holds everything where tok_ptr -> str_ptr and stored */
+                
+        tok_len = strlen(tok_ptr);
+        str_ptr = malloc(tok_len + 1);
+        strcpy(str_ptr, tok_ptr);
+
         if (cmd_flag) {
-          new_cmd->cmd = ptr;
+          new_cmd->cmd = str_ptr;
           cmd_flag = false;
         } else if (input_flag) {
-          new_cmd->input_file = ptr;
+          new_cmd->input_file = str_ptr;
           input_flag = false;
         } else if (output_flag) {
-          new_cmd->output_file = ptr;
+          new_cmd->output_file = str_ptr;
           output_flag = false;
         } else {
-          // no specific flag. check if the string is > or < of & otherwise save as next arg
-          if (strcmp(ptr, "<") == 0) {
-            input_flag = true;
-          } else if (strcmp(ptr, ">") == 0) {
-            output_flag = true;
-          } else if (strcmp(ptr, "&\n") == 0) {
-            new_cmd->background = true;
-          } else {
-            new_cmd->args[arg_i] = ptr;
-            ++arg_i;
-          }
+          new_cmd->args[arg_i] = str_ptr;
+          ++arg_i;
         }
-      }
-      ptr = strtok(NULL, delim);
 
-    } while (ptr != NULL);
+      }
+
+      tok_ptr = strtok(NULL, delim);
+
+    } while (tok_ptr != NULL);
 
 
 exit:
-  return;
+    free(buffer);
+    return;
 }
 
 void free_cmd(CMD *new_cmd) {
 
   // overwrite the command
   if (new_cmd->cmd != NULL) {
+    free(new_cmd->cmd);
     new_cmd->cmd = NULL;
   }
 
   // overwrite the args
   int i = 0;
   while (new_cmd->args[i] != NULL) {
+    free(new_cmd->args[i]);
     new_cmd->args[i] = NULL;
     ++i;
   }
 
   // overwrite input file
   if (new_cmd->input_file != NULL) {
+    free(new_cmd->input_file);
     new_cmd->input_file = NULL;
   }
 
   // overwrite output file
   if (new_cmd->output_file != NULL) {
+    free(new_cmd->output_file);
     new_cmd->output_file = NULL;
   }
 
@@ -185,8 +190,6 @@ void free_cmd(CMD *new_cmd) {
   new_cmd->background = false;
   new_cmd->comment = false;
   new_cmd->empty = false;
-
-  free(new_cmd->cmd_buffer);
 
   return;
 }
