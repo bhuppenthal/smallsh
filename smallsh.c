@@ -8,6 +8,7 @@
 
 // macros
 #define MAX_ARGS 512
+#define PATH_MAX 4096
 
 // definition of the command struct
 struct command{
@@ -33,6 +34,14 @@ int main(int argc, char *argv[]) {
 
   // initialize the command struct
   CMD new_cmd;
+
+  // initialize the built in variables
+  char *current_path;
+  char *new_path;
+  int dir_status = 0;
+  
+  // initialize exit status
+  int exit_status = 0;
   
   while (true) {
 
@@ -55,6 +64,20 @@ int main(int argc, char *argv[]) {
         // cd
         else if (strcmp(new_cmd.cmd, "cd") == 0) {
           printf("hey nice cd\n");
+
+          // check for change to home directory
+          if (new_cmd.args[1] == NULL) {
+            printf("switch to home\n");
+            new_path = getenv("HOME");
+            if (chdir(new_path) == -1) perror("cd home");
+          } else if (new_cmd.args[1][0] == '/') {
+            printf("absolute path\n");
+            if (chdir(new_cmd.args[1]) == -1) perror("cd absolute path");
+          } else {
+           printf("relative path\n");
+           current_path = getcwd(NULL, PATH_MAX);
+
+          }
         }
         // all other commands
         else {
@@ -86,7 +109,7 @@ void parse_cmd(CMD *new_cmd) {
   bool cmd_flag = true;
   bool input_flag = false;
   bool output_flag = false;
-  int arg_i = 0;
+  int arg_i = 1;
 
   char *str_ptr;
   // initialize the fields that may not take on another value
@@ -138,6 +161,7 @@ void parse_cmd(CMD *new_cmd) {
         if (cmd_flag) {
           str_ptr = pid_expansion(str_ptr);
           new_cmd->cmd = str_ptr;
+          new_cmd->args[0] = str_ptr;
           cmd_flag = false;
         } else if (input_flag) {
           new_cmd->input_file = str_ptr;
@@ -171,7 +195,7 @@ void free_cmd(CMD *new_cmd) {
   }
 
   // overwrite the args
-  int i = 0;
+  int i = 1;
   while (new_cmd->args[i] != NULL) {
     free(new_cmd->args[i]);
     new_cmd->args[i] = NULL;
