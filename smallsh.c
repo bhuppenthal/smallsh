@@ -166,9 +166,9 @@ void parse_cmd(CMD *new_cmd) {
         tok_len = strlen(tok_ptr);
         str_ptr = malloc(tok_len + 1);
         strcpy(str_ptr, tok_ptr);
+        str_ptr = pid_expansion(str_ptr);
 
         if (cmd_flag) {
-          str_ptr = pid_expansion(str_ptr);
           new_cmd->cmd = str_ptr;
           new_cmd->args[0] = str_ptr;
           cmd_flag = false;
@@ -266,9 +266,6 @@ char *pid_expansion(char *base) {
   // cast our pid number into a string for the string concatenation
   char *pid_str = (char *)malloc(sizeof(long));
   sprintf(pid_str, "%d", pid_num);
-  printf("int: %d\n", pid_num);
-  printf("str: %s\n", pid_str);
-
 
   // search for occurrences of substring "$$"
   int i = 0;
@@ -282,14 +279,29 @@ char *pid_expansion(char *base) {
     }
   }
 
-
-  printf("occurrences: %d\n", occurrences);
-
   if (occurrences != 0) {
     size_t new_len = strlen(base) + occurrences*(strlen(pid_str) - 2) + 1;
     char *new_str = calloc(new_len, new_len);
 
     // fill in the new string!
+    // i in the base string, while i is not at the end, scan for occurrences.
+    // so, at each i, if it does not equal a $, copy char into new str
+    // otherwise, if i $ and i+1 $, concatenate pid, then move i forward by 2
+    i = 0;
+    while (i < strlen(base)) {
+      // look for occurrences of $$
+      if (strncmp(&base[i], "$$", 2) == 0) {
+        strcat(new_str, pid_str);
+        i = i + 2;
+      } else {
+        strncat(new_str, &base[i], 1);
+        ++i;
+      }
+    }
+
+    free(base);
+    free(pid_str);
+    return new_str;
      
   }
 
