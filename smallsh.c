@@ -24,6 +24,7 @@ typedef struct command CMD;
 void parse_cmd(CMD *new_cmd);
 void print_cmd(CMD *new_cmd);
 void free_cmd(CMD *new_cmd);
+void pid_expansion(CMD *new_cmd);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -35,6 +36,8 @@ int main(int argc, char *argv[]) {
 
     printf(": ");
     parse_cmd(&new_cmd);
+    print_cmd(&new_cmd);
+    pid_expansion(&new_cmd);
     print_cmd(&new_cmd);
 
     /* Here's where the magic happens. */
@@ -215,6 +218,35 @@ void print_cmd(CMD *new_cmd) {
   if (new_cmd->background) {
     printf("running in the background\n");
   }
+
+  return;
+}
+
+void pid_expansion(CMD *new_cmd) {
+  /* The idea here is to scan through every string inside of the cmd struct. If we find
+   * an instance of $$ in a row, we want to replace that. So set an expansion flag, count
+   * the number of occurrences. malloc a new string, create the new expanded string, free
+   * the old string, then have the struct point to our new string.
+   * Easy.*/
+
+  bool expand = false;
+  int occurrences = 0;
+
+  // check new_cmd->cmd
+  for(int i = 0; i<strlen(new_cmd->cmd); i++) {
+    if (strncmp(&new_cmd->cmd[i], "$$", 2) == 0) {
+      bool expand = true;
+      ++occurrences;
+      printf("found an expansion!");
+    }
+  }
+  //
+  // check new_cmd->args
+  //
+  // check new_cmd->input_file
+  //
+  // check new_cmd->output_file
+
 
   return;
 }
