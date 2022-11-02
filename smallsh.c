@@ -70,13 +70,22 @@ int main(int argc, char *argv[]) {
             printf("switch to home\n");
             new_path = getenv("HOME");
             if (chdir(new_path) == -1) perror("cd home");
+          // check for an absolute path
           } else if (new_cmd.args[1][0] == '/') {
             printf("absolute path\n");
             if (chdir(new_cmd.args[1]) == -1) perror("cd absolute path");
+          // relative path
           } else {
            printf("relative path\n");
            current_path = getcwd(NULL, PATH_MAX);
-
+           new_path = calloc(strlen(current_path) + strlen(new_cmd.args[1]) + 2, 1);
+           strcpy(new_path, current_path);
+           strcat(new_path, "/");
+           strcat(new_path, new_cmd.args[1]);
+           printf("%s\n", new_path);
+           if (chdir(new_path) == -1) perror("cd relative path");
+           free(current_path);
+           free(new_path);
           }
         }
         // all other commands
