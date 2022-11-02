@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // macros
 #define MAX_ARGS 512
@@ -24,7 +26,7 @@ typedef struct command CMD;
 void parse_cmd(CMD *new_cmd);
 void print_cmd(CMD *new_cmd);
 void free_cmd(CMD *new_cmd);
-void pid_expansion(CMD *new_cmd);
+char *pid_expansion(char *base);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -36,8 +38,6 @@ int main(int argc, char *argv[]) {
 
     printf(": ");
     parse_cmd(&new_cmd);
-    print_cmd(&new_cmd);
-    pid_expansion(&new_cmd);
     print_cmd(&new_cmd);
 
     /* Here's where the magic happens. */
@@ -136,6 +136,7 @@ void parse_cmd(CMD *new_cmd) {
         strcpy(str_ptr, tok_ptr);
 
         if (cmd_flag) {
+          str_ptr = pid_expansion(str_ptr);
           new_cmd->cmd = str_ptr;
           cmd_flag = false;
         } else if (input_flag) {
@@ -222,32 +223,43 @@ void print_cmd(CMD *new_cmd) {
   return;
 }
 
-void pid_expansion(CMD *new_cmd) {
-  /* The idea here is to scan through every string inside of the cmd struct. If we find
-   * an instance of $$ in a row, we want to replace that. So set an expansion flag, count
-   * the number of occurrences. malloc a new string, create the new expanded string, free
-   * the old string, then have the struct point to our new string.
-   * Easy.*/
+char *pid_expansion(char *base) {
 
-  bool expand = false;
   int occurrences = 0;
 
-  // check new_cmd->cmd
-  for(int i = 0; i<strlen(new_cmd->cmd); i++) {
-    if (strncmp(&new_cmd->cmd[i], "$$", 2) == 0) {
-      bool expand = true;
+  // get the pid number
+  pid_t pid_num = getpid();
+
+  // cast our pid number into a string for the string concatenation
+  char *pid_str = (char *)malloc(sizeof(long));
+  sprintf(pid_str, "%d", pid_num);
+  printf("int: %d\n", pid_num);
+  printf("str: %s\n", pid_str);
+
+
+  // search for occurrences of substring "$$"
+  int i = 0;
+  while( i < strlen(base)) {
+  // look for occurrences
+    if (strncmp(&base[i], "$$", 2) == 0) {
       ++occurrences;
-      printf("found an expansion!");
+      i = i + 2;
+    } else {
+      ++i;
     }
   }
-  //
-  // check new_cmd->args
-  //
-  // check new_cmd->input_file
-  //
-  // check new_cmd->output_file
 
 
-  return;
+  printf("occurrences: %d\n", occurrences);
+
+  if (occurrences != 0) {
+    size_t new_len = strlen(base) + occurrences*(strlen(pid_str) - 2) + 1;
+    char *new_str = calloc(new_len, new_len);
+
+    // fill in the new string!
+     
+  }
+
+  return base;
 }
 
