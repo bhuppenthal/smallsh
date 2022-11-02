@@ -12,7 +12,6 @@
 
 // definition of the command struct
 struct command{
-  char* cmd;
   char* args[MAX_ARGS];
   char* input_file;
   char* output_file;
@@ -28,12 +27,13 @@ void parse_cmd(CMD *new_cmd);
 void print_cmd(CMD *new_cmd);
 void free_cmd(CMD *new_cmd);
 char *pid_expansion(char *base);
+void exec_cd(char *args[]);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
 
   // initialize the command struct
-  CMD new_cmd;
+  CMD cmd;
 
   // initialize the built in variables
   char *current_path;
@@ -46,42 +46,42 @@ int main(int argc, char *argv[]) {
   while (true) {
 
     printf(": ");
-    parse_cmd(&new_cmd);
-    print_cmd(&new_cmd);
+    parse_cmd(&cmd);
+    print_cmd(&cmd);
 
     /* Here's where the magic happens. */
     // if the first char in cmd is a comment, we do nothing
     // if the cmd struct is blank, so cmd is null, we do nothing
-    if (!new_cmd.comment && !new_cmd.empty) { 
+    if (!cmd.comment && !cmd.empty) { 
         // exit
-        if (strcmp(new_cmd.cmd, "exit") == 0) {
+        if (strcmp(cmd.args[0], "exit") == 0) {
           printf("hey nice exit\n");
         }
         // status
-        else if (strcmp(new_cmd.cmd, "status") == 0) {
+        else if (strcmp(cmd.args[0], "status") == 0) {
           printf("hey nice status\n");
         }
         // cd
-        else if (strcmp(new_cmd.cmd, "cd") == 0) {
+        else if (strcmp(cmd.args[0], "cd") == 0) {
           printf("hey nice cd\n");
 
           // check for change to home directory
-          if (new_cmd.args[1] == NULL) {
+          if (cmd.args[1] == NULL) {
             printf("switch to home\n");
             new_path = getenv("HOME");
             if (chdir(new_path) == -1) perror("cd home");
           // check for an absolute path
-          } else if (new_cmd.args[1][0] == '/') {
+          } else if (cmd.args[1][0] == '/') {
             printf("absolute path\n");
-            if (chdir(new_cmd.args[1]) == -1) perror("cd absolute path");
+            if (chdir(cmd.args[1]) == -1) perror("cd absolute path");
           // relative path
           } else {
            printf("relative path\n");
            current_path = getcwd(NULL, PATH_MAX);
-           new_path = calloc(strlen(current_path) + strlen(new_cmd.args[1]) + 2, 1);
+           new_path = calloc(strlen(current_path) + strlen(cmd.args[1]) + 2, 1);
            strcpy(new_path, current_path);
            strcat(new_path, "/");
-           strcat(new_path, new_cmd.args[1]);
+           strcat(new_path, cmd.args[1]);
            printf("%s\n", new_path);
            if (chdir(new_path) == -1) perror("cd relative path");
            free(current_path);
@@ -99,14 +99,14 @@ int main(int argc, char *argv[]) {
         }
       }
 
-    free_cmd(&new_cmd);
+    free_cmd(&cmd);
     printf("\n");
   }
 
   return EXIT_SUCCESS;
 }
 
-void parse_cmd(CMD *new_cmd) {
+void parse_cmd(CMD *cmd) {
 
   char *buffer = NULL;
   size_t num_bytes;
@@ -122,11 +122,10 @@ void parse_cmd(CMD *new_cmd) {
 
   char *str_ptr;
   // initialize the fields that may not take on another value
-  new_cmd->cmd = NULL;
-  for (size_t i = 0; i < MAX_ARGS; i++) new_cmd->args[i] = NULL;
-  new_cmd->input_file = NULL;
-  new_cmd->output_file = NULL;
-  new_cmd->background = false;
+  for (size_t i = 0; i < MAX_ARGS; i++) cmd->args[i] = NULL;
+  cmd->input_file = NULL;
+  cmd->output_file = NULL;
+  cmd->background = false;
 
   // read the line into the buffer using getline()
   // this will automatically allocate this buffer, which will need to be freed.
@@ -136,11 +135,11 @@ void parse_cmd(CMD *new_cmd) {
   // perform the check for an empty line or a comment line here.
   if (buffer[0] == '\n') {
     printf("empty command\n");
-    new_cmd->empty = true;
+    cmd->empty = true;
     goto exit;
   } else if (buffer[0] == '#') {
     printf("comment\n");
-    new_cmd->comment = true;
+    cmd->comment = true;
     goto exit;
   }
 
@@ -158,7 +157,7 @@ void parse_cmd(CMD *new_cmd) {
       } else if (strcmp(tok_ptr, ">") == 0) {
         output_flag = true;
       } else if (strcmp(tok_ptr, "&") == 0) {
-        new_cmd->background = true;
+        cmd->background = true;
       } else {
       
         /* Holds everything where tok_ptr -> str_ptr and stored */
@@ -169,17 +168,16 @@ void parse_cmd(CMD *new_cmd) {
         str_ptr = pid_expansion(str_ptr);
 
         if (cmd_flag) {
-          new_cmd->cmd = str_ptr;
-          new_cmd->args[0] = str_ptr;
+          cmd->args[0] = str_ptr;
           cmd_flag = false;
         } else if (input_flag) {
-          new_cmd->input_file = str_ptr;
+          cmd->input_file = str_ptr;
           input_flag = false;
         } else if (output_flag) {
-          new_cmd->output_file = str_ptr;
+          cmd->output_file = str_ptr;
           output_flag = false;
         } else {
-          new_cmd->args[arg_i] = str_ptr;
+          cmd->args[arg_i] = str_ptr;
           ++arg_i;
         }
 
@@ -195,61 +193,53 @@ exit:
     return;
 }
 
-void free_cmd(CMD *new_cmd) {
-
-  // overwrite the command
-  if (new_cmd->cmd != NULL) {
-    free(new_cmd->cmd);
-    new_cmd->cmd = NULL;
-  }
+void free_cmd(CMD *cmd) {
 
   // overwrite the args
-  int i = 1;
-  while (new_cmd->args[i] != NULL) {
-    free(new_cmd->args[i]);
-    new_cmd->args[i] = NULL;
+  int i = 0;
+  while (cmd->args[i] != NULL) {
+    free(cmd->args[i]);
+    cmd->args[i] = NULL;
     ++i;
   }
 
   // overwrite input file
-  if (new_cmd->input_file != NULL) {
-    free(new_cmd->input_file);
-    new_cmd->input_file = NULL;
+  if (cmd->input_file != NULL) {
+    free(cmd->input_file);
+    cmd->input_file = NULL;
   }
 
   // overwrite output file
-  if (new_cmd->output_file != NULL) {
-    free(new_cmd->output_file);
-    new_cmd->output_file = NULL;
+  if (cmd->output_file != NULL) {
+    free(cmd->output_file);
+    cmd->output_file = NULL;
   }
 
   // set background to false
-  new_cmd->background = false;
-  new_cmd->comment = false;
-  new_cmd->empty = false;
+  cmd->background = false;
+  cmd->comment = false;
+  cmd->empty = false;
 
   return;
 }
 
-void print_cmd(CMD *new_cmd) {
+void print_cmd(CMD *cmd) {
    
-  printf("cmd: %s\n", new_cmd->cmd);
-
   int i = 0;
-  while (new_cmd->args[i] != NULL) {
-    printf("arg[%d]: %s\n", i, new_cmd->args[i]);
+  while (cmd->args[i] != NULL) {
+    printf("arg[%d]: %s\n", i, cmd->args[i]);
     ++i;
   }
 
-  if (new_cmd->input_file != NULL) {
-    printf("input file: %s\n", new_cmd->input_file);
+  if (cmd->input_file != NULL) {
+    printf("input file: %s\n", cmd->input_file);
   }
 
-  if (new_cmd->output_file != NULL) {
-    printf("output file: %s\n", new_cmd->output_file);
+  if (cmd->output_file != NULL) {
+    printf("output file: %s\n", cmd->output_file);
   }
 
-  if (new_cmd->background) {
+  if (cmd->background) {
     printf("running in the background\n");
   }
 
@@ -304,7 +294,15 @@ char *pid_expansion(char *base) {
     return new_str;
      
   }
-
+  free(pid_str);
   return base;
+}
+
+void exec_cd(char *args[]) {
+
+
+   
+
+  return;
 }
 
