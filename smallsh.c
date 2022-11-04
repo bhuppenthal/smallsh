@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 // macros
 #define MAX_ARGS 512
@@ -37,12 +38,16 @@ int main(int argc, char *argv[]) {
 
   // initialize exit status
   int exit_status = 0;
+
+  // parent and child stuff
+  pid_t spawnpid = -100;
+  int child_status;
+  int child_pid;
   
   while (true) {
 
     printf(": ");
     parse_cmd(&cmd);
-    print_cmd(&cmd);
 
     /* Here's where the magic happens. */
     // if the first char in cmd is a comment, we do nothing
@@ -50,32 +55,52 @@ int main(int argc, char *argv[]) {
     if (!cmd.comment && !cmd.empty) { 
         // exit
         if (strcmp(cmd.args[0], "exit") == 0) {
-          printf("hey nice exit\n");
+          // this will kill any child processes
+          goto exit;
         }
         // status
         else if (strcmp(cmd.args[0], "status") == 0) {
-          printf("hey nice status\n");
+          // print out either
+          printf("exit value %d\n", exit_status);
+          // exit status or terminating signal of last foreground process run by shell
+          // shell cmds do not count as fg processes
         }
         // cd
         else if (strcmp(cmd.args[0], "cd") == 0) {
-          printf("hey nice cd\n");
           exec_cd(cmd.args);
         }
         // all other commands
         else {
-          printf("you want something else? sure!\n");
-          //fork
-          ////switch case
-          ///child exec
-          ///parent wait
-          ///error
+          spawnpid = fork();
+
+          switch(spawnpid) {
+
+          //error
+          case -1:
+            perror("fork() failed");
+            exit(1);
+            break;
+
+          //child process block
+          case 0:
+            if (execvp(cmd.args[0], cmd.args) == -1) perror("non-built in function error");
+            break;
+
+          // parent process block
+          default:
+            child_pid = wait(&child_status);
+            break;
+            // if background
+            // else
+          }
         }
       }
 
     free_cmd(&cmd);
-    printf("\n");
   }
 
+exit:
+  free_cmd(&cmd);
   return EXIT_SUCCESS;
 }
 
