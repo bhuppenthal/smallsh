@@ -6,10 +6,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 // macros
 #define MAX_ARGS 512
 #define PATH_MAX 4096
+#define DA_INIT_LEN 5
 
 // definition of the command struct
 struct command{
@@ -23,12 +26,23 @@ struct command{
 
 typedef struct command CMD;
 
+// definition of the dynamic array struct
+struct dynamic_array{
+  pid_t *array;
+  int length;
+  int num_elem;
+};
+
+typedef struct dynamic_array DA;
+
 // Function declarations
 void parse_cmd(CMD *new_cmd);
 void print_cmd(CMD *new_cmd);
 void free_cmd(CMD *new_cmd);
 char *pid_expansion(char *base);
 void exec_cd(char *args[]);
+void da_append(DA *da, pid_t new_elem);
+void da_remove(DA *da, int index);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -38,62 +52,139 @@ int main(int argc, char *argv[]) {
 
   // initialize exit status
   int exit_status = 0;
+  int exit_signal = 0;
 
   // parent and child stuff
-  pid_t spawnpid = -100;
+  pid_t child_pid = -100;
   int child_status;
-  int child_pid;
+
+  // create the dynamic array to track the background processes
+  DA bg_pids;
+  bg_pids.array = calloc(DA_INIT_LEN, sizeof(pid_t));
+  bg_pids.length = DA_INIT_LEN;
+  bg_pids.num_elem = 0;
+
+  // redirection file descriptors
+  int src = -1;
+  int dest = -1;
   
   while (true) {
 
     printf(": ");
+    fflush(NULL);
     parse_cmd(&cmd);
 
     /* Here's where the magic happens. */
-    // if the first char in cmd is a comment, we do nothing
-    // if the cmd struct is blank, so cmd is null, we do nothing
     if (!cmd.comment && !cmd.empty) { 
-        // exit
         if (strcmp(cmd.args[0], "exit") == 0) {
           // this will kill any child processes
           goto exit;
         }
-        // status
+
         else if (strcmp(cmd.args[0], "status") == 0) {
           // print out either
           printf("exit value %d\n", exit_status);
+          fflush(NULL);
           // exit status or terminating signal of last foreground process run by shell
           // shell cmds do not count as fg processes
         }
-        // cd
+
         else if (strcmp(cmd.args[0], "cd") == 0) {
           exec_cd(cmd.args);
         }
-        // all other commands
-        else {
-          spawnpid = fork();
 
-          switch(spawnpid) {
+        else {
+          child_pid = fork();
+
+          switch(child_pid) {
 
           //error
           case -1:
             perror("fork() failed");
+            fflush(NULL);
             exit(1);
             break;
 
           //child process block
           case 0:
-            if (execvp(cmd.args[0], cmd.args) == -1) perror("non-built in function error");
+            //redirection
+            // foreground: redirect only to in/out
+            // background: redirect to in or dev/null
+            //              redirect to out or dev/null
+            
+            // open the files for redirection
+            if (cmd.input_file != NULL) {
+              src = open(cmd.input_file, O_RDONLY);
+              if (src == -1) {
+                perror("open input");
+                exit(1);
+              }
+            }
+            if (cmd.output_file != NULL) {
+              dest = open(cmd.output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+              if (dest == -1) {
+                perror("open output");
+                exit(1);
+              }
+            }
+
+            // perform redirection
+            // background
+            if (cmd.background) {
+            }
+
+            // foreground
+            else {
+              if (cmd.input_file != NULL) {
+                if (dup2(src, 0) == -1) {
+                  perror("dup2 input foreground");
+                  exit(1);
+                }
+              }
+              if (cmd.output_file != NULL) {
+                 if (dup2(dest, 1) == -1) {
+                   perror("dup2 output foreground");
+                   exit(1);
+                 }
+              }
+            }
+            execvp(cmd.args[0], cmd.args);
+            perror("execvp");
+            fflush(NULL);
+            exit(1);
             break;
 
           // parent process block
           default:
-            child_pid = wait(&child_status);
+            // background process
+            if (cmd.background) {
+              printf("background pid is %d\n", child_pid);
+              fflush(NULL);
+              child_pid = waitpid(child_pid, &child_status, WNOHANG);
+              // append to the array
+
+            }
+            
+            // foreground process
+            else {
+              child_pid = wait(&child_status);
+              // implement the WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
+              if(WIFEXITED(child_status)) {
+                exit_status = WEXITSTATUS(child_status);
+              } else {
+                exit_signal = WTERMSIG(child_status);
+              }
+            }
             break;
             // if background
             // else
           }
         }
+
+
+        // check if any of the background processes have terminated
+        // message showing process id and exit status of process if one has terminated (separate from exit status of fg)
+        // WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
       }
 
     free_cmd(&cmd);
@@ -101,6 +192,7 @@ int main(int argc, char *argv[]) {
 
 exit:
   free_cmd(&cmd);
+  free(bg_pids.array);
   return EXIT_SUCCESS;
 }
 
@@ -136,7 +228,6 @@ void parse_cmd(CMD *cmd) {
     cmd->empty = true;
     goto exit;
   } else if (buffer[0] == '#') {
-    printf("comment\n");
     cmd->comment = true;
     goto exit;
   }
@@ -304,7 +395,6 @@ void exec_cd(char *args[]) {
   
   // check for change to home directory
           if (args[1] == NULL) {
-            printf("switch to home\n");
             new_path = getenv("HOME");
             if (chdir(new_path) == -1) perror("cd home");
           // check for an absolute path
@@ -313,13 +403,11 @@ void exec_cd(char *args[]) {
             if (chdir(args[1]) == -1) perror("cd absolute path");
           // relative path
           } else {
-           printf("relative path\n");
            current_path = getcwd(NULL, PATH_MAX);
            new_path = calloc(strlen(current_path) + strlen(args[1]) + 2, 1);
            strcpy(new_path, current_path);
            strcat(new_path, "/");
            strcat(new_path, args[1]);
-           printf("%s\n", new_path);
            if (chdir(new_path) == -1) perror("cd relative path");
            free(current_path);
            free(new_path);
@@ -328,3 +416,21 @@ void exec_cd(char *args[]) {
   return;
 }
 
+void da_append(DA *da, pid_t new_elem) {
+
+  //if length == num_elements, resize to double using realloc
+  if (da->num_elem == da->length) {
+    da->array = realloc(da->array, 2*da->length*sizeof(pid_t));
+  }
+  da->array[da->num_elem] = new_elem;
+  ++da->num_elem;
+
+  return;
+}
+
+void da_remove(DA *da, int index) {
+
+  //
+
+  return;
+}
