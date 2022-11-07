@@ -1,3 +1,9 @@
+/*
+ * Brenda Huppenthal
+ * CS344 Operating Systems
+ * 11/13/2022
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -45,31 +51,38 @@ void da_append(DA *da, pid_t new_elem);
 void da_remove(DA *da, int index);
 void da_print(DA *da);
 void redirect(CMD *cmd);
+void kill_children(DA *da);
+void check_children(DA *da);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
+  /*
+   * Main method.
+   * ------------------------------
+   * Controls the program flow. Has the main loop for accepting input from the user.
+   *
+   * Parameters:
+   *  argc: the number of arguments
+   *  argv: the arguments as strings. argv[0] is always the program name, if there were more args.
+   *
+   *  Returns:
+   *   Exit 0 on success.
+   */
 
-  // initialize the command struct
   CMD cmd;
 
-  // initialize exit status
-  int exit_status = 0;
-  int exit_signal = 0;
-
-  // parent and child stuff
-  pid_t child_pid = -100;
-  int child_status;
-  int pid_status;
-
-  // create the dynamic array to track the background processes
   DA bg_pids;
   bg_pids.array = calloc(DA_INIT_LEN, sizeof(pid_t));
   bg_pids.length = DA_INIT_LEN;
   bg_pids.num_elem = 0;
+ 
+  int exit_status = 0;
+  int exit_signal = 0;
 
-  // redirection file descriptors
-  int src = -1;
-  int dest = -1;
+  pid_t child_pid = -100;
+  int child_status;
+  int pid_status;
+
 
   while (true) {
 
@@ -85,11 +98,8 @@ int main(int argc, char *argv[]) {
       }
 
       else if (strcmp(cmd.args[0], "status") == 0) {
-        // print out either
         printf("exit value %d\n", exit_status);
         fflush(NULL);
-        // exit status or terminating signal of last foreground process run by
-        // shell shell cmds do not count as fg processes
       }
 
       else if (strcmp(cmd.args[0], "cd") == 0) {
@@ -100,7 +110,6 @@ int main(int argc, char *argv[]) {
         child_pid = fork();
 
         switch (child_pid) {
-
         // error
         case -1:
           perror("fork() failed");
@@ -110,12 +119,6 @@ int main(int argc, char *argv[]) {
 
         // child process block
         case 0:
-          // redirection
-          //  foreground: redirect only to in/out
-          //  background: redirect to in or dev/null
-          //               redirect to out or dev/null
-
-          // open the files for redirection
           redirect(&cmd);
           execvp(cmd.args[0], cmd.args);
           perror("execvp");
@@ -130,12 +133,9 @@ int main(int argc, char *argv[]) {
             printf("background pid is %d\n", child_pid);
             fflush(NULL);
             da_append(&bg_pids, child_pid);
-            child_pid =
-                waitpid(child_pid, &child_status,
-                        WNOHANG); // probably need to change this in case it
+            child_pid = waitpid(child_pid, &child_status, WNOHANG); // probably need to change this in case it
                                   // ends this quick, do we even need this line?
           }
-
           // foreground process
           else {
             child_pid = waitpid(child_pid, &child_status, 0);
@@ -146,39 +146,12 @@ int main(int argc, char *argv[]) {
             }
           }
           break;
-          // if background
-          // else
         }
       }
     }
-
+    // before returning control to the user,
     // check if any of the background processes have terminated
-    // message showing process id and exit status of process if one has
-    // terminated (separate from exit status of fg) WIFEXITED, WIFSIGNALED,
-    // WIFSTOPPED here to set exit status
-    for (int i = 0; i < bg_pids.num_elem; ++i) {
-      pid_status = waitpid(bg_pids.array[i], &child_status, WNOHANG);
-
-      if (pid_status == -1)
-        perror("waitpid on child process");
-      else if (pid_status != 0) {
-
-        if (WIFEXITED(child_status)) {
-          exit_status = WEXITSTATUS(child_status);
-          printf("background pid %d is done: exit value %d\n", pid_status,
-                 exit_status);
-          fflush(NULL);
-        } else {
-          exit_signal = WTERMSIG(child_status);
-          printf("terminated by signal %d\n", exit_signal);
-          fflush(NULL);
-        }
-
-        da_remove(&bg_pids, i);
-        --i;
-      }
-    }
-
+    check_children(&bg_pids); 
     free_cmd(&cmd);
   }
 
@@ -432,6 +405,7 @@ void da_remove(DA *da, int index) {
 
   while (da->array[i] != 0) {
     da->array[i - 1] = da->array[i];
+    ++i;
   }
 
   --da->num_elem;
@@ -496,6 +470,44 @@ void redirect(CMD *cmd) {
       exit(1);
     }
   }
+
+  return;
+}
+
+void kill_children(DA *da){
+
+  return;
+}
+
+void check_children(DA *da){
+
+  int pid_status;
+  int child_status;
+  int exit_status;
+  int exit_signal;
+  
+  for (int i = 0; i < da->num_elem; ++i) {
+      pid_status = waitpid(da->array[i], &child_status, WNOHANG);
+
+      if (pid_status == -1)
+        perror("waitpid on child process");
+      else if (pid_status != 0) {
+
+        if (WIFEXITED(child_status)) {
+          exit_status = WEXITSTATUS(child_status);
+          printf("background pid %d is done: exit value %d\n", pid_status, exit_status);
+          fflush(NULL);
+        } else {
+          exit_signal = WTERMSIG(child_status);
+          printf("terminated by signal %d\n", exit_signal);
+          fflush(NULL);
+        }
+
+        da_remove(da, i);
+        --i;
+      }
+    }
+
 
   return;
 }
