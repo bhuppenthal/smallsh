@@ -43,6 +43,7 @@ char *pid_expansion(char *base);
 void exec_cd(char *args[]);
 void da_append(DA *da, pid_t new_elem);
 void da_remove(DA *da, int index);
+void da_print(DA *da); 
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -67,8 +68,11 @@ int main(int argc, char *argv[]) {
   // redirection file descriptors
   int src = -1;
   int dest = -1;
-  
+
+
   while (true) {
+
+    da_print(&bg_pids);
 
     printf(": ");
     fflush(NULL);
@@ -160,9 +164,8 @@ int main(int argc, char *argv[]) {
             if (cmd.background) {
               printf("background pid is %d\n", child_pid);
               fflush(NULL);
+              da_append(&bg_pids, child_pid);
               child_pid = waitpid(child_pid, &child_status, WNOHANG);
-              // append to the array
-
             }
             
             // foreground process
@@ -420,8 +423,12 @@ void da_append(DA *da, pid_t new_elem) {
 
   //if length == num_elements, resize to double using realloc
   if (da->num_elem == da->length) {
-    da->array = realloc(da->array, 2*da->length*sizeof(pid_t));
+    da->length = 2*da->length;
+    da->array = realloc(da->array, da->length*sizeof(pid_t));
   }
+
+  printf("%d\n", new_elem);
+
   da->array[da->num_elem] = new_elem;
   ++da->num_elem;
 
@@ -430,7 +437,25 @@ void da_append(DA *da, pid_t new_elem) {
 
 void da_remove(DA *da, int index) {
 
-  //
+  // starting at the index, move elements left until reaching an element of 0
+  da->array[index] = 0;
+  
+  int i = index + 1;
+
+  while (da->array[i] != 0) {
+    da->array[i-1] = da->array[i];
+  }
+
+  return;
+}
+
+void da_print(DA *da) {
+
+  printf("length: %d\nnum_elem: %d\n", da->length, da->num_elem);
+
+  for (int i = 0; i < da->length; ++i) {
+    printf("index %d: %d\n", i, da->array[i]);
+  }
 
   return;
 }
