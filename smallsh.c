@@ -119,38 +119,45 @@ int main(int argc, char *argv[]) {
             if (cmd.input_file != NULL) {
               src = open(cmd.input_file, O_RDONLY);
               if (src == -1) {
-                perror("open input");
+                perror("open input file for read");
+                exit(1);
+              }
+            } else if (cmd.background) {
+              src = open("/dev/null", O_RDONLY);
+              if (src == -1) {
+                perror("open /dev/null for read");
                 exit(1);
               }
             }
+
             if (cmd.output_file != NULL) {
               dest = open(cmd.output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
               if (dest == -1) {
-                perror("open output");
+                perror("open output file for write");
+                exit(1);
+              }
+            } else if (cmd.background) {
+              dest = open("/dev/null", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+              if (dest == -1) {
+                perror("open /dev/null for write");
                 exit(1);
               }
             }
 
             // perform redirection
-            // background
-            if (cmd.background) {
-            }
-
-            // foreground
-            else {
-              if (cmd.input_file != NULL) {
+              if (cmd.input_file != NULL || cmd.background) {
                 if (dup2(src, 0) == -1) {
-                  perror("dup2 input foreground");
+                  perror("dup2 input");
                   exit(1);
                 }
               }
-              if (cmd.output_file != NULL) {
+              if (cmd.output_file != NULL || cmd.background) {
                  if (dup2(dest, 1) == -1) {
-                   perror("dup2 output foreground");
+                   perror("dup2 output");
                    exit(1);
                  }
               }
-            }
+
             execvp(cmd.args[0], cmd.args);
             perror("execvp");
             fflush(NULL);
@@ -442,8 +449,6 @@ void da_append(DA *da, pid_t new_elem) {
     da->length = 2*da->length;
     da->array = realloc(da->array, da->length*sizeof(pid_t));
   }
-
-  printf("%d\n", new_elem);
 
   da->array[da->num_elem] = new_elem;
   ++da->num_elem;
