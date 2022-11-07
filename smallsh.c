@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
   // parent and child stuff
   pid_t child_pid = -100;
   int child_status;
+  int pid_status;
 
   // create the dynamic array to track the background processes
   DA bg_pids;
@@ -71,8 +72,6 @@ int main(int argc, char *argv[]) {
 
 
   while (true) {
-
-    da_print(&bg_pids);
 
     printf(": ");
     fflush(NULL);
@@ -165,13 +164,12 @@ int main(int argc, char *argv[]) {
               printf("background pid is %d\n", child_pid);
               fflush(NULL);
               da_append(&bg_pids, child_pid);
-              child_pid = waitpid(child_pid, &child_status, WNOHANG);
+              child_pid = waitpid(child_pid, &child_status, WNOHANG);  // probably need to change this in case it ends this quick, do we even need this line?
             }
             
             // foreground process
             else {
-              child_pid = wait(&child_status);
-              // implement the WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
+              child_pid = waitpid(child_pid, &child_status, 0);
               if(WIFEXITED(child_status)) {
                 exit_status = WEXITSTATUS(child_status);
               } else {
@@ -183,12 +181,31 @@ int main(int argc, char *argv[]) {
             // else
           }
         }
-
-
-        // check if any of the background processes have terminated
-        // message showing process id and exit status of process if one has terminated (separate from exit status of fg)
-        // WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
       }
+
+    // check if any of the background processes have terminated
+    // message showing process id and exit status of process if one has terminated (separate from exit status of fg)
+    // WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
+    for (int i = 0; i < bg_pids.num_elem; ++i) {
+      pid_status = waitpid(bg_pids.array[i], &child_status, WNOHANG);
+
+      if (pid_status == -1) perror("waitpid on child process");
+      else if (pid_status != 0) {
+
+        if(WIFEXITED(child_status)) {
+          exit_status = WEXITSTATUS(child_status);
+          printf("background pid %d is done: exit value %d\n", pid_status, exit_status);
+          fflush(NULL);
+        } else {
+          exit_signal = WTERMSIG(child_status);
+          printf("terminated by signal %d\n", exit_signal);
+          fflush(NULL);
+        }
+
+        da_remove(&bg_pids, i);
+        --i;
+      }
+    }
 
     free_cmd(&cmd);
   }
@@ -227,7 +244,6 @@ void parse_cmd(CMD *cmd) {
 
   // perform the check for an empty line or a comment line here.
   if (buffer[0] == '\n') {
-    printf("empty command\n");
     cmd->empty = true;
     goto exit;
   } else if (buffer[0] == '#') {
@@ -445,6 +461,8 @@ void da_remove(DA *da, int index) {
   while (da->array[i] != 0) {
     da->array[i-1] = da->array[i];
   }
+
+  --da->num_elem;
 
   return;
 }
