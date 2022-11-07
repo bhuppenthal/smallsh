@@ -1,13 +1,13 @@
-#include <stdio.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 // macros
 #define MAX_ARGS 512
@@ -15,10 +15,10 @@
 #define DA_INIT_LEN 5
 
 // definition of the command struct
-struct command{
-  char* args[MAX_ARGS];
-  char* input_file;
-  char* output_file;
+struct command {
+  char *args[MAX_ARGS];
+  char *input_file;
+  char *output_file;
   bool background;
   bool comment;
   bool empty;
@@ -27,7 +27,7 @@ struct command{
 typedef struct command CMD;
 
 // definition of the dynamic array struct
-struct dynamic_array{
+struct dynamic_array {
   pid_t *array;
   int length;
   int num_elem;
@@ -43,7 +43,8 @@ char *pid_expansion(char *base);
 void exec_cd(char *args[]);
 void da_append(DA *da, pid_t new_elem);
 void da_remove(DA *da, int index);
-void da_print(DA *da); 
+void da_print(DA *da);
+void redirect(CMD *cmd);
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -70,7 +71,6 @@ int main(int argc, char *argv[]) {
   int src = -1;
   int dest = -1;
 
-
   while (true) {
 
     printf(": ");
@@ -78,130 +78,95 @@ int main(int argc, char *argv[]) {
     parse_cmd(&cmd);
 
     /* Here's where the magic happens. */
-    if (!cmd.comment && !cmd.empty) { 
-        if (strcmp(cmd.args[0], "exit") == 0) {
-          // this will kill any child processes
-          goto exit;
-        }
-
-        else if (strcmp(cmd.args[0], "status") == 0) {
-          // print out either
-          printf("exit value %d\n", exit_status);
-          fflush(NULL);
-          // exit status or terminating signal of last foreground process run by shell
-          // shell cmds do not count as fg processes
-        }
-
-        else if (strcmp(cmd.args[0], "cd") == 0) {
-          exec_cd(cmd.args);
-        }
-
-        else {
-          child_pid = fork();
-
-          switch(child_pid) {
-
-          //error
-          case -1:
-            perror("fork() failed");
-            fflush(NULL);
-            exit(1);
-            break;
-
-          //child process block
-          case 0:
-            //redirection
-            // foreground: redirect only to in/out
-            // background: redirect to in or dev/null
-            //              redirect to out or dev/null
-            
-            // open the files for redirection
-            if (cmd.input_file != NULL) {
-              src = open(cmd.input_file, O_RDONLY);
-              if (src == -1) {
-                perror("open input file for read");
-                exit(1);
-              }
-            } else if (cmd.background) {
-              src = open("/dev/null", O_RDONLY);
-              if (src == -1) {
-                perror("open /dev/null for read");
-                exit(1);
-              }
-            }
-
-            if (cmd.output_file != NULL) {
-              dest = open(cmd.output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-              if (dest == -1) {
-                perror("open output file for write");
-                exit(1);
-              }
-            } else if (cmd.background) {
-              dest = open("/dev/null", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-              if (dest == -1) {
-                perror("open /dev/null for write");
-                exit(1);
-              }
-            }
-
-            // perform redirection
-              if (cmd.input_file != NULL || cmd.background) {
-                if (dup2(src, 0) == -1) {
-                  perror("dup2 input");
-                  exit(1);
-                }
-              }
-              if (cmd.output_file != NULL || cmd.background) {
-                 if (dup2(dest, 1) == -1) {
-                   perror("dup2 output");
-                   exit(1);
-                 }
-              }
-
-            execvp(cmd.args[0], cmd.args);
-            perror("execvp");
-            fflush(NULL);
-            exit(1);
-            break;
-
-          // parent process block
-          default:
-            // background process
-            if (cmd.background) {
-              printf("background pid is %d\n", child_pid);
-              fflush(NULL);
-              da_append(&bg_pids, child_pid);
-              child_pid = waitpid(child_pid, &child_status, WNOHANG);  // probably need to change this in case it ends this quick, do we even need this line?
-            }
-            
-            // foreground process
-            else {
-              child_pid = waitpid(child_pid, &child_status, 0);
-              if(WIFEXITED(child_status)) {
-                exit_status = WEXITSTATUS(child_status);
-              } else {
-                exit_signal = WTERMSIG(child_status);
-              }
-            }
-            break;
-            // if background
-            // else
-          }
-        }
+    if (!cmd.comment && !cmd.empty) {
+      if (strcmp(cmd.args[0], "exit") == 0) {
+        // this will kill any child processes
+        goto exit;
       }
 
+      else if (strcmp(cmd.args[0], "status") == 0) {
+        // print out either
+        printf("exit value %d\n", exit_status);
+        fflush(NULL);
+        // exit status or terminating signal of last foreground process run by
+        // shell shell cmds do not count as fg processes
+      }
+
+      else if (strcmp(cmd.args[0], "cd") == 0) {
+        exec_cd(cmd.args);
+      }
+
+      else {
+        child_pid = fork();
+
+        switch (child_pid) {
+
+        // error
+        case -1:
+          perror("fork() failed");
+          fflush(NULL);
+          exit(1);
+          break;
+
+        // child process block
+        case 0:
+          // redirection
+          //  foreground: redirect only to in/out
+          //  background: redirect to in or dev/null
+          //               redirect to out or dev/null
+
+          // open the files for redirection
+          redirect(&cmd);
+          execvp(cmd.args[0], cmd.args);
+          perror("execvp");
+          fflush(NULL);
+          exit(1);
+          break;
+
+        // parent process block
+        default:
+          // background process
+          if (cmd.background) {
+            printf("background pid is %d\n", child_pid);
+            fflush(NULL);
+            da_append(&bg_pids, child_pid);
+            child_pid =
+                waitpid(child_pid, &child_status,
+                        WNOHANG); // probably need to change this in case it
+                                  // ends this quick, do we even need this line?
+          }
+
+          // foreground process
+          else {
+            child_pid = waitpid(child_pid, &child_status, 0);
+            if (WIFEXITED(child_status)) {
+              exit_status = WEXITSTATUS(child_status);
+            } else {
+              exit_signal = WTERMSIG(child_status);
+            }
+          }
+          break;
+          // if background
+          // else
+        }
+      }
+    }
+
     // check if any of the background processes have terminated
-    // message showing process id and exit status of process if one has terminated (separate from exit status of fg)
-    // WIFEXITED, WIFSIGNALED, WIFSTOPPED here to set exit status
+    // message showing process id and exit status of process if one has
+    // terminated (separate from exit status of fg) WIFEXITED, WIFSIGNALED,
+    // WIFSTOPPED here to set exit status
     for (int i = 0; i < bg_pids.num_elem; ++i) {
       pid_status = waitpid(bg_pids.array[i], &child_status, WNOHANG);
 
-      if (pid_status == -1) perror("waitpid on child process");
+      if (pid_status == -1)
+        perror("waitpid on child process");
       else if (pid_status != 0) {
 
-        if(WIFEXITED(child_status)) {
+        if (WIFEXITED(child_status)) {
           exit_status = WEXITSTATUS(child_status);
-          printf("background pid %d is done: exit value %d\n", pid_status, exit_status);
+          printf("background pid %d is done: exit value %d\n", pid_status,
+                 exit_status);
           fflush(NULL);
         } else {
           exit_signal = WTERMSIG(child_status);
@@ -239,7 +204,8 @@ void parse_cmd(CMD *cmd) {
 
   char *str_ptr;
   // initialize the fields that may not take on another value
-  for (size_t i = 0; i < MAX_ARGS; i++) cmd->args[i] = NULL;
+  for (size_t i = 0; i < MAX_ARGS; i++)
+    cmd->args[i] = NULL;
   cmd->input_file = NULL;
   cmd->output_file = NULL;
   cmd->background = false;
@@ -264,48 +230,47 @@ void parse_cmd(CMD *cmd) {
   /* Time to parse input! */
   tok_ptr = strtok(buffer, delim);
 
-    do {
+  do {
 
-      /* Check for instances where we do not need to store a string, but instead need to set a flag: */
-      if (strcmp(tok_ptr, "<") == 0) {
-        input_flag = true;
-      } else if (strcmp(tok_ptr, ">") == 0) {
-        output_flag = true;
-      } else if (strcmp(tok_ptr, "&") == 0) {
-        cmd->background = true;
+    /* Check for instances where we do not need to store a string, but instead
+     * need to set a flag: */
+    if (strcmp(tok_ptr, "<") == 0) {
+      input_flag = true;
+    } else if (strcmp(tok_ptr, ">") == 0) {
+      output_flag = true;
+    } else if (strcmp(tok_ptr, "&") == 0) {
+      cmd->background = true;
+    } else {
+
+      /* Holds everything where tok_ptr -> str_ptr and stored */
+
+      tok_len = strlen(tok_ptr);
+      str_ptr = malloc(tok_len + 1);
+      strcpy(str_ptr, tok_ptr);
+      str_ptr = pid_expansion(str_ptr);
+
+      if (cmd_flag) {
+        cmd->args[0] = str_ptr;
+        cmd_flag = false;
+      } else if (input_flag) {
+        cmd->input_file = str_ptr;
+        input_flag = false;
+      } else if (output_flag) {
+        cmd->output_file = str_ptr;
+        output_flag = false;
       } else {
-      
-        /* Holds everything where tok_ptr -> str_ptr and stored */
-                
-        tok_len = strlen(tok_ptr);
-        str_ptr = malloc(tok_len + 1);
-        strcpy(str_ptr, tok_ptr);
-        str_ptr = pid_expansion(str_ptr);
-
-        if (cmd_flag) {
-          cmd->args[0] = str_ptr;
-          cmd_flag = false;
-        } else if (input_flag) {
-          cmd->input_file = str_ptr;
-          input_flag = false;
-        } else if (output_flag) {
-          cmd->output_file = str_ptr;
-          output_flag = false;
-        } else {
-          cmd->args[arg_i] = str_ptr;
-          ++arg_i;
-        }
-
+        cmd->args[arg_i] = str_ptr;
+        ++arg_i;
       }
+    }
 
-      tok_ptr = strtok(NULL, delim);
+    tok_ptr = strtok(NULL, delim);
 
-    } while (tok_ptr != NULL);
-
+  } while (tok_ptr != NULL);
 
 exit:
-    free(buffer);
-    return;
+  free(buffer);
+  return;
 }
 
 void free_cmd(CMD *cmd) {
@@ -339,7 +304,7 @@ void free_cmd(CMD *cmd) {
 }
 
 void print_cmd(CMD *cmd) {
-   
+
   int i = 0;
   while (cmd->args[i] != NULL) {
     printf("arg[%d]: %s\n", i, cmd->args[i]);
@@ -374,8 +339,8 @@ char *pid_expansion(char *base) {
 
   // search for occurrences of substring "$$"
   int i = 0;
-  while( i < strlen(base)) {
-  // look for occurrences
+  while (i < strlen(base)) {
+    // look for occurrences
     if (strncmp(&base[i], "$$", 2) == 0) {
       ++occurrences;
       i = i + 2;
@@ -385,7 +350,7 @@ char *pid_expansion(char *base) {
   }
 
   if (occurrences != 0) {
-    size_t new_len = strlen(base) + occurrences*(strlen(pid_str) - 2) + 1;
+    size_t new_len = strlen(base) + occurrences * (strlen(pid_str) - 2) + 1;
     char *new_str = calloc(new_len, new_len);
 
     // fill in the new string!
@@ -407,7 +372,6 @@ char *pid_expansion(char *base) {
     free(base);
     free(pid_str);
     return new_str;
-     
   }
   free(pid_str);
   return base;
@@ -418,36 +382,39 @@ void exec_cd(char *args[]) {
   // initialize the built in variables
   char *current_path;
   char *new_path;
-  
+
   // check for change to home directory
-          if (args[1] == NULL) {
-            new_path = getenv("HOME");
-            if (chdir(new_path) == -1) perror("cd home");
-          // check for an absolute path
-          } else if (args[1][0] == '/') {
-            printf("absolute path\n");
-            if (chdir(args[1]) == -1) perror("cd absolute path");
-          // relative path
-          } else {
-           current_path = getcwd(NULL, PATH_MAX);
-           new_path = calloc(strlen(current_path) + strlen(args[1]) + 2, 1);
-           strcpy(new_path, current_path);
-           strcat(new_path, "/");
-           strcat(new_path, args[1]);
-           if (chdir(new_path) == -1) perror("cd relative path");
-           free(current_path);
-           free(new_path);
-          }
+  if (args[1] == NULL) {
+    new_path = getenv("HOME");
+    if (chdir(new_path) == -1)
+      perror("cd home");
+    // check for an absolute path
+  } else if (args[1][0] == '/') {
+    printf("absolute path\n");
+    if (chdir(args[1]) == -1)
+      perror("cd absolute path");
+    // relative path
+  } else {
+    current_path = getcwd(NULL, PATH_MAX);
+    new_path = calloc(strlen(current_path) + strlen(args[1]) + 2, 1);
+    strcpy(new_path, current_path);
+    strcat(new_path, "/");
+    strcat(new_path, args[1]);
+    if (chdir(new_path) == -1)
+      perror("cd relative path");
+    free(current_path);
+    free(new_path);
+  }
 
   return;
 }
 
 void da_append(DA *da, pid_t new_elem) {
 
-  //if length == num_elements, resize to double using realloc
+  // if length == num_elements, resize to double using realloc
   if (da->num_elem == da->length) {
-    da->length = 2*da->length;
-    da->array = realloc(da->array, da->length*sizeof(pid_t));
+    da->length = 2 * da->length;
+    da->array = realloc(da->array, da->length * sizeof(pid_t));
   }
 
   da->array[da->num_elem] = new_elem;
@@ -460,11 +427,11 @@ void da_remove(DA *da, int index) {
 
   // starting at the index, move elements left until reaching an element of 0
   da->array[index] = 0;
-  
+
   int i = index + 1;
 
   while (da->array[i] != 0) {
-    da->array[i-1] = da->array[i];
+    da->array[i - 1] = da->array[i];
   }
 
   --da->num_elem;
@@ -478,6 +445,56 @@ void da_print(DA *da) {
 
   for (int i = 0; i < da->length; ++i) {
     printf("index %d: %d\n", i, da->array[i]);
+  }
+
+  return;
+}
+
+void redirect(CMD *cmd) {
+
+  int src;
+  int dest;
+
+  if (cmd->input_file != NULL) {
+    src = open(cmd->input_file, O_RDONLY);
+    if (src == -1) {
+      perror("open input file for read");
+      exit(1);
+    }
+  } else if (cmd->background) {
+    src = open("/dev/null", O_RDONLY);
+    if (src == -1) {
+      perror("open /dev/null for read");
+      exit(1);
+    }
+  }
+
+  if (cmd->output_file != NULL) {
+    dest = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dest == -1) {
+      perror("open output file for write");
+      exit(1);
+    }
+  } else if (cmd->background) {
+    dest = open("/dev/null", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dest == -1) {
+      perror("open /dev/null for write");
+      exit(1);
+    }
+  }
+
+  // perform redirection
+  if (cmd->input_file != NULL || cmd->background) {
+    if (dup2(src, 0) == -1) {
+      perror("dup2 input");
+      exit(1);
+    }
+  }
+  if (cmd->output_file != NULL || cmd->background) {
+    if (dup2(dest, 1) == -1) {
+      perror("dup2 output");
+      exit(1);
+    }
   }
 
   return;
