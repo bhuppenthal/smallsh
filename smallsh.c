@@ -87,23 +87,31 @@ int main(int argc, char *argv[]) {
   int child_status;
 
   // signal handling registration for SIGINT
-  struct sigaction ignore_action = {0};
-  struct sigaction allow_interrupt = {0};
-  ignore_action.sa_handler = SIG_IGN;
-  sigaction(SIGINT, &ignore_action, &allow_interrupt);
+  struct sigaction ignore_signal; 
+  struct sigaction allow_interrupt;
+  ignore_signal.sa_handler = SIG_IGN;
+  sigaction(SIGINT, &ignore_signal, &allow_interrupt);
 
   // signal handling registration for SIGTSTP
-  struct sigaction fg_action = {0};
+  struct sigaction fg_action;
   fg_action.sa_handler = toggle_fg_mode;
-  sigfillset(&fg_action.sa_mask);
-  fg_action.sa_flags = 0;
+  if (sigaddset(&fg_action.sa_mask, SIGTSTP) == -1) perror("sigaddset");
+  fg_action.sa_flags = SA_RESTART;
   sigaction(SIGTSTP, &fg_action, NULL);
+
+  // masks for SIGTSTP
+  sigset_t mask_sigtstp;
+  if (sigaddset(&mask_sigtstp, SIGTSTP) == -1) perror("create mask");
 
   while (true) {
 
     printf(": ");
     fflush(NULL);
+    //unblock SIGTSTP
+    sigprocmask(SIG_UNBLOCK, &mask_sigtstp, NULL);
     parse_cmd(&cmd);
+    //block SIGTSTP
+    sigprocmask(SIG_BLOCK, &mask_sigtstp, NULL);
 
     /* Here's where the magic happens. */
     if (!cmd.comment && !cmd.empty) {
@@ -187,7 +195,7 @@ void parse_cmd(CMD *cmd) {
 
   char *buffer = NULL;
   size_t num_bytes;
-  ssize_t input_len;
+  ssize_t input_len = -1;
   char *tok_ptr;
   char *delim = " ";
   size_t tok_len;
@@ -207,7 +215,7 @@ void parse_cmd(CMD *cmd) {
 
   // read the line into the buffer using getline()
   // this will automatically allocate this buffer, which will need to be freed.
-  // so this pointer needs to be stored in struct, so it can later be freed.
+  // so this pointer needs to be stored in struct, so it can later be freed.a
   input_len = getline(&buffer, &num_bytes, stdin);
 
   // perform the check for an empty line or a comment line here.
@@ -549,6 +557,6 @@ void toggle_fg_mode() {
     printf("\nExiting foreground-only mode\n: ");
   }
   fflush(NULL);
-  
+
   return;
 }
