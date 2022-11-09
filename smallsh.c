@@ -88,8 +88,9 @@ int main(int argc, char *argv[]) {
 
   // signal handling registration for SIGINT
   struct sigaction ignore_action = {0};
+  struct sigaction allow_interrupt = {0};
   ignore_action.sa_handler = SIG_IGN;
-  sigaction(SIGINT, &ignore_action, NULL);
+  sigaction(SIGINT, &ignore_action, &allow_interrupt);
 
   // signal handling registration for SIGTSTP
   struct sigaction fg_action = {0};
@@ -108,6 +109,7 @@ int main(int argc, char *argv[]) {
     if (!cmd.comment && !cmd.empty) {
       if (strcmp(cmd.args[0], "exit") == 0) {
         // this will kill any child processes
+        kill_children(&bg_pids);
         goto exit;
       }
 
@@ -133,6 +135,7 @@ int main(int argc, char *argv[]) {
 
         // child process block
         case 0:
+          if (!cmd.background || fg_mode) sigaction(SIGINT, &allow_interrupt, NULL);
           redirect(&cmd);
           execvp(cmd.args[0], cmd.args);
           perror("execvp");
@@ -157,7 +160,7 @@ int main(int argc, char *argv[]) {
               exit_status = WEXITSTATUS(child_status);
             } else {
               exit_signal = WTERMSIG(child_status);
-              printf("background pid %d terminated by signal %d\n", child_pid, exit_signal);
+              printf("foreground pid %d terminated by signal %d\n", child_pid, exit_signal);
               fflush(NULL);
             }
           }
@@ -495,6 +498,11 @@ void redirect(CMD *cmd) {
 
 void kill_children(DA *da){
 
+  for (int i = 0; i < da->num_elem; ++i) {
+    if(kill(da->array[i], SIGKILL) == 0) printf("pid %d killed\n", da->array[i]);
+    else perror("kill");
+  }
+
   return;
 }
 
@@ -536,9 +544,9 @@ void toggle_fg_mode() {
   fg_mode = !fg_mode;
 
   if (fg_mode) {
-    printf("Entering foreground-only mode (& is now ignored)\n");
+    printf("\nEntering foreground-only mode (& is now ignored)\n: ");
   } else {
-    printf("Exiting foreground-only mode\n");
+    printf("\nExiting foreground-only mode\n: ");
   }
   fflush(NULL);
   
