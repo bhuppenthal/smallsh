@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 
 // macros
 #define MAX_ARGS 512
@@ -41,6 +42,8 @@ struct dynamic_array {
 
 typedef struct dynamic_array DA;
 
+static bool fg_mode = false;
+
 // Function declarations
 void parse_cmd(CMD *new_cmd);
 void print_cmd(CMD *new_cmd);
@@ -53,6 +56,7 @@ void da_print(DA *da);
 void redirect(CMD *cmd);
 void kill_children(DA *da);
 void check_children(DA *da);
+void toggle_fg_mode();
 
 // main method of the program, control flow
 int main(int argc, char *argv[]) {
@@ -81,8 +85,18 @@ int main(int argc, char *argv[]) {
 
   pid_t child_pid = -100;
   int child_status;
-  int pid_status;
 
+  // signal handling registration for SIGINT
+  struct sigaction ignore_action = {0};
+  ignore_action.sa_handler = SIG_IGN;
+  sigaction(SIGINT, &ignore_action, NULL);
+
+  // signal handling registration for SIGTSTP
+  struct sigaction fg_action = {0};
+  fg_action.sa_handler = toggle_fg_mode;
+  sigfillset(&fg_action.sa_mask);
+  fg_action.sa_flags = 0;
+  sigaction(SIGTSTP, &fg_action, NULL);
 
   while (true) {
 
@@ -129,7 +143,7 @@ int main(int argc, char *argv[]) {
         // parent process block
         default:
           // background process
-          if (cmd.background) {
+          if (cmd.background && !fg_mode) {
             printf("background pid is %d\n", child_pid);
             fflush(NULL);
             da_append(&bg_pids, child_pid);
@@ -143,16 +157,16 @@ int main(int argc, char *argv[]) {
               exit_status = WEXITSTATUS(child_status);
             } else {
               exit_signal = WTERMSIG(child_status);
+              printf("background pid %d terminated by signal %d\n", child_pid, exit_signal);
+              fflush(NULL);
             }
           }
           break;
         }
       }
     }
-    // before returning control to the user,
-    // check if any of the background processes have terminated
-    check_children(&bg_pids); 
-    free_cmd(&cmd);
+    check_children(&bg_pids);  // check if any background processes have terminated 
+    free_cmd(&cmd);  // clear out the command struct
   }
 
 exit:
@@ -162,6 +176,11 @@ exit:
 }
 
 void parse_cmd(CMD *cmd) {
+  /*
+   *
+   *
+   *
+   */
 
   char *buffer = NULL;
   size_t num_bytes;
@@ -499,7 +518,7 @@ void check_children(DA *da){
           fflush(NULL);
         } else {
           exit_signal = WTERMSIG(child_status);
-          printf("terminated by signal %d\n", exit_signal);
+          printf("background pid %d terminated by signal %d\n", pid_status, exit_signal);
           fflush(NULL);
         }
 
@@ -509,5 +528,19 @@ void check_children(DA *da){
     }
 
 
+  return;
+}
+
+void toggle_fg_mode() {
+
+  fg_mode = !fg_mode;
+
+  if (fg_mode) {
+    printf("Entering foreground-only mode (& is now ignored)\n");
+  } else {
+    printf("Exiting foreground-only mode\n");
+  }
+  fflush(NULL);
+  
   return;
 }
