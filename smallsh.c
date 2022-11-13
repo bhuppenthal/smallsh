@@ -3,7 +3,7 @@
  * CS344 Operating Systems
  * 11/13/2022
  */
-
+#define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -214,6 +214,10 @@ exit:
 }
 
 void cmd_init(CMD *cmd) {
+  /* Initializes the command struct.
+   *
+   * Parameters:
+   *   *cmd: pointer to the command struct */
 
   for (size_t i = 0; i < MAX_ARGS; i++) cmd->args[i] = NULL;
   cmd->input_file = NULL;
@@ -229,8 +233,7 @@ void cmd_parse(CMD *cmd) {
    * Meant to be used with the free_cmd function, which will free allocated storage on the heap.
    *
    * Parameters:
-   *    *cmd: pointer to the command struct to store the parsed user input
-   */
+   *    *cmd: pointer to the command struct to store the parsed user input */
 
   /* Raw user input */
   char *buffer = NULL;
@@ -312,8 +315,7 @@ exit:
 }
 
 void cmd_free(CMD *cmd) {
-  /*
-   * Frees all memory used by the previous command and readies the command struct for the 
+  /* Frees all memory used by the previous command and readies the command struct for the 
    * next user input.
    *
    * Parameters:
@@ -344,8 +346,7 @@ void cmd_free(CMD *cmd) {
 }
 
 void cmd_print(CMD *cmd) {
-  /*
-   * Prints the current contents of the command struct for debugging purposes.
+  /* Prints the current contents of the command struct for debugging purposes.
    *
    * Parameters:
    *   *cmd: pointer to the command struct that stores user input */
@@ -372,8 +373,7 @@ void cmd_print(CMD *cmd) {
 }
 
 char *pid_expansion(char *og_str) {
-  /*
-   * Performs process id expansion of the string. If the string does not have $$, this method returns the same
+  /* Performs process id expansion of the string. If the string does not have $$, this method returns the same
    * pointer that it was passed. Otherwise, it allocates a new string, performs the expansion, and frees the
    * old string before returning the pointer to the new string.
    *
@@ -424,8 +424,7 @@ char *pid_expansion(char *og_str) {
 }
 
 void exec_cd(char *args[]) {
-  /* 
-   * Implements the functionality of the built in change directory command using the chdir function.
+  /* Implements the functionality of the built in change directory command using the chdir function.
    *
    * Paramters:
    *   *args[]: argument array governing the command */
@@ -447,8 +446,7 @@ void exec_cd(char *args[]) {
 }
 
 void da_append(DA *da, pid_t new_elem) {
-  /* 
-   * Appends an element to the dynamic array. If the array is full before the append, this method will double the size of the
+  /* Appends an element to the dynamic array. If the array is full before the append, this method will double the size of the
    * array using the realloc function.
    *
    * Parameters:
@@ -468,8 +466,7 @@ void da_append(DA *da, pid_t new_elem) {
 }
 
 void da_remove(DA *da, int index) {
-  /* 
-   * Removes the element at index from the array, and moves the remaining elements to fill in the empty space.
+  /* Removes the element at index from the array, and moves the remaining elements to fill in the empty space.
    *
    * Parameters:
    *   *da: pointer to the dynamic array struct
@@ -490,8 +487,7 @@ void da_remove(DA *da, int index) {
 }
 
 void da_print(DA *da) {
-  /* 
-   * Prints the contents of the dynamic array struct for debugging purposes.
+  /* Prints the contents of the dynamic array struct for debugging purposes.
    *
    * Parameters:
    *   *da: pointer to the dynamic array struct */
